@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Rift Rush</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rift Rush">
+<link rel="apple-touch-icon" href="images/rift-192.png">
+<link rel="icon" type="image/png" href="images/rift-192.png">
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; overscroll-behavior: none; }
+  #game { position: fixed; inset: 0; width: 100vw; height: 100dvh; border: 0; display: none; background: #000; }
+  #wait { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+          color: #fff; font: 600 17px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; text-align: center; padding: 24px; box-sizing: border-box; }
+  #wait img { width: 84px; height: 84px; border-radius: 18px; }
+  #wait small { color: #9aa4b8; font-weight: 500; font-size: 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #f0b43c; animation: p 1.2s infinite ease-in-out; }
+  @keyframes p { 50% { opacity: .25; transform: scale(.7); } }
+</style>
+</head>
+<body>
+<div id="wait">
+  <img src="images/rift-192.png" alt="">
+  <div id="msg">Procurando o jogo no seu PC...</div>
+  <small id="sub">No PC, clique no ícone "Celular Rift Rush" e espere uns segundos.</small>
+  <div class="dot"></div>
+</div>
+<iframe id="game" allow="autoplay; fullscreen; microphone; gamepad" allowfullscreen></iframe>
+<script>
+// Rift Rush: a fixed address for the phone. The PC's "Celular Rift Rush" icon writes its new Cloudflare link into link.json each time;
+// this page reads it, checks the PC is really answering on it, and opens the game full screen inside.
+(function () {
+  var frame = document.getElementById('game'), wait = document.getElementById('wait'), msg = document.getElementById('msg'), sub = document.getElementById('sub');
+  var current = '', tries = 0;
+  function alive(link, ok, bad) {
+    var img = new Image(), done = false;
+    var t = setTimeout(function () { if (!done) { done = true; bad(); } }, 8000);
+    img.onload = function () { if (!done) { done = true; clearTimeout(t); ok(); } };
+    img.onerror = function () { if (!done) { done = true; clearTimeout(t); bad(); } };
+    img.src = link.replace(/\/$/, '') + '/images/rift-192.png?t=' + Date.now();   // (only the game's own page has this picture)
+  }
+  function look() {
+    tries++;
+    fetch('link.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      var link = (j && j.link) || '';
+      if (!link) return later('O jogo ainda não foi ligado no PC.');
+      alive(link, function () {
+        if (link !== current) { current = link; frame.src = link; }
+        frame.style.display = 'block'; wait.style.display = 'none';
+        setTimeout(watch, 15000);
+      }, function () { later(tries < 3 ? 'Procurando o jogo no seu PC...' : 'O PC ainda não está transmitindo.'); });
+    }).catch(function () { later('Sem internet? Tentando de novo...'); });
+  }
+  function later(text) {
+    msg.textContent = text; sub.textContent = 'No PC, clique no ícone "Celular Rift Rush" e espere uns segundos. Esta tela entra no jogo sozinha.';
+    frame.style.display = 'none'; wait.style.display = 'flex';
+    setTimeout(look, 5000);
+  }
+  function watch() {   // while playing: if the PC stopped or made a new link, go and fetch it
+    fetch('link.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.link && j.link !== current) { tries = 0; look(); return; }
+      alive(current, function () { setTimeout(watch, 15000); }, function () { tries = 0; look(); });
+    }).catch(function () { setTimeout(watch, 15000); });
+  }
+  look();
+})();
+</script>
+</body>
+</html>
